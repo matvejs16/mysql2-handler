@@ -1,5 +1,5 @@
-import mysql from 'mysql2'
-import mysqlPromise from 'mysql2/promise'
+import * as mysql from 'mysql2'
+import * as mysqlPromise from 'mysql2/promise'
 
 interface DB {
     Handle: mysql.Pool | null,

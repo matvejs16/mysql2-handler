@@ -1,7 +1,7 @@
 {
   "name": "mysql2-handler",
   "repository": "matvejs16/mysql2-handler",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "",
   "main": "dist/index.js",
   "scripts": {
