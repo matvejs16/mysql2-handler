@@ -8,7 +8,7 @@ interface DB {
     escape(string: string | number | object | Array<any>): string | number | null
 }
 
-type DBConnectOptions = {
+export type DBConnectOptions = {
     connectionLimit?: number,
     host: string,
     user: string,
