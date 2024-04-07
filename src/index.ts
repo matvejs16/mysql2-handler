@@ -1,29 +1,25 @@
-import * as mysql from 'mysql2'
-import * as mysqlPromise from 'mysql2/promise'
+import mysql from 'mysql2'
+import mysqlPromise, { FieldPacket, RowDataPacket } from 'mysql2/promise'
 
 interface DB {
-    Handle: mysql.Pool | null,
-    Handle_Promise: mysqlPromise.Pool | null,
-    Connect(options: DBConnectOptions, callback: Function): void,
-    escape(string: string | number | object | Array<any>): string | number | null
+    Handle: mysql.Pool,
+    Handle_Promise: mysqlPromise.Pool,
+    Connect(callback: Function): void,
+    escape(string: string | number | object | Array<any>): string | number | null,
+    onConnect(callback: Function): void,
+    getTableFields(tableName: string): Promise<RowDataPacket[]>,
+    makeFromStringForTable(tableName: string, tableAlias?: string): Promise<string>
 }
 
-export type DBConnectOptions = {
-    connectionLimit?: number,
-    host: string,
-    user: string,
-    password: string,
-    database: string,
-    connectTimeout?: number,
-    multipleStatements?: boolean,
-    debug?: boolean,
-}
+const waitingForConnection: Function[] = []
 
 const DB: DB = {
+    // @ts-expect-error
     Handle: null,
+    // @ts-expect-error
     Handle_Promise: null,
-    Connect: function(options: DBConnectOptions, callback: Function) {
-        const defaultOptions: DBConnectOptions = {
+    Connect: function(callback: Function) {
+        this.Handle = mysql.createPool({
             connectionLimit: 1000,
             host: 'localhost',
             user: 'root',
@@ -32,19 +28,38 @@ const DB: DB = {
             debug: false,
             connectTimeout: 10000,
             multipleStatements: true
-        }
-        options = Object.assign(defaultOptions, options)
-
-        this.Handle = mysql.createPool(options)
+        })
         this.Handle.query('SET NAMES utf8mb4;');
         this.Handle.query('SET CHARACTER SET utf8mb4');
         this.Handle.query('SET COLLATION_CONNECTION="utf8mb4_general_ci"');
         this.Handle_Promise = this.Handle.promise()
         callback()
+        for (const waitingCallback of waitingForConnection) {
+            waitingCallback()
+        }
+        waitingForConnection.length = 0
     },
     escape: function(string) {
         if (string == 'NULL') return string
         return mysql.escape(string)
+    },
+    onConnect: function(callback: Function) {
+        if (this.Handle) return callback()
+        waitingForConnection.push(callback)
+    },
+    async getTableFields(tableName: string) {
+        const [ thisTableFields ]: [RowDataPacket[], FieldPacket[]] = await DB.Handle_Promise.query(`SHOW COLUMNS FROM ${tableName}`);
+        return thisTableFields;
+    },
+    async makeFromStringForTable(tableName: string, tableAlias?: string) {
+        if (!tableAlias) tableAlias = tableName;
+        const thisTableFields = await DB.getTableFields(tableName);
+        const thisTableFieldsString = thisTableFields.map((field: RowDataPacket) => {
+            const thisField = field as any;
+            return `${tableAlias}.${thisField.Field} AS \`${tableName}:${thisField.Field}\``
+        })
+
+        return thisTableFieldsString.join(', ');
     }
 }
 
